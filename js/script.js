@@ -4,25 +4,15 @@
 // =========================================
 
 const converterForm = document.getElementById("converter-form");
-
 const amountInput = document.getElementById("amount");
-
 const fromCurrency = document.getElementById("from-currency");
-
 const toCurrency = document.getElementById("to-currency");
-
 const swapButton = document.getElementById("swap-button");
-
 const convertButton = document.getElementById("convert-button");
-
 const resultSection = document.getElementById("result-section");
-
 const resultDisplay = document.getElementById("result");
-
 const exchangeRateDisplay = document.getElementById("exchange-rate");
-
 const lastUpdatedDisplay = document.getElementById("last-updated");
-
 const errorMessage = document.getElementById("error-message");
 
 
@@ -32,9 +22,12 @@ const errorMessage = document.getElementById("error-message");
 
 const API_URL = "https://api.frankfurter.dev/v2";
 
+let conversionTimer;
+let activeRequest = null;
+
 
 // =========================================
-// 3. DISPLAY ERROR MESSAGE
+// 3. ERROR HANDLING
 // =========================================
 
 function showError(message) {
@@ -43,11 +36,6 @@ function showError(message) {
     resultSection.hidden = true;
 }
 
-
-// =========================================
-// 4. CLEAR ERROR MESSAGE
-// =========================================
-
 function clearError() {
     errorMessage.textContent = "";
     errorMessage.hidden = true;
@@ -55,15 +43,96 @@ function clearError() {
 
 
 // =========================================
-// 5. FORMAT CURRENCY
+// 4. CURRENCY FORMATTING
 // =========================================
 
 function formatCurrency(amount, currency) {
-    return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: currency,
-        maximumFractionDigits: 2
-    }).format(amount);
+    try {
+        return new Intl.NumberFormat("en-US", {
+            style: "currency",
+            currency: currency,
+            maximumFractionDigits: 2
+        }).format(amount);
+    } catch {
+        return `${amount.toFixed(2)} ${currency}`;
+    }
+}
+
+
+// =========================================
+// 5. LOAD SUPPORTED CURRENCIES
+// =========================================
+
+async function loadCurrencies() {
+
+    try {
+        const response = await fetch(`${API_URL}/currencies`);
+
+        if (!response.ok) {
+            throw new Error("Could not load currencies.");
+        }
+
+        const currencies = await response.json();
+
+        // Preserve the currently selected currencies
+        const selectedFrom = fromCurrency.value;
+        const selectedTo = toCurrency.value;
+
+        // Keep the original five as fallback options
+        const fallbackCurrencies = [
+            { code: "GHS", name: "Ghanaian Cedi" },
+            { code: "USD", name: "US Dollar" },
+            { code: "EUR", name: "Euro" },
+            { code: "GBP", name: "British Pound" },
+            { code: "NGN", name: "Nigerian Naira" }
+        ];
+
+        const currencyMap = new Map();
+
+        fallbackCurrencies.forEach(currency => {
+            currencyMap.set(currency.code, currency.name);
+        });
+
+        currencies.forEach(currency => {
+            if (
+                currency.code &&
+                /^[A-Z]{3}$/.test(currency.code)
+            ) {
+                currencyMap.set(currency.code, currency.name);
+            }
+        });
+
+        const sortedCurrencies = [...currencyMap.entries()]
+            .map(([code, name]) => ({ code, name }))
+            .sort((a, b) => a.code.localeCompare(b.code));
+
+        // Update both dropdowns
+        [fromCurrency, toCurrency].forEach(select => {
+
+            select.innerHTML = "";
+
+            sortedCurrencies.forEach(currency => {
+
+                const option = document.createElement("option");
+
+                option.value = currency.code;
+
+                option.textContent =
+                    `${currency.code} - ${currency.name}`;
+
+                select.appendChild(option);
+            });
+
+        });
+
+        // Restore selections
+        fromCurrency.value = selectedFrom;
+        toCurrency.value = selectedTo;
+
+    } catch (error) {
+        console.error("Currency loading error:", error);
+        // Original HTML options remain available if loading fails.
+    }
 }
 
 
@@ -73,45 +142,53 @@ function formatCurrency(amount, currency) {
 
 async function convertCurrency(event) {
 
-    event.preventDefault();
+    if (event) {
+        event.preventDefault();
+    }
 
     clearError();
 
     const amount = Number(amountInput.value);
-
     const from = fromCurrency.value;
-
     const to = toCurrency.value;
 
-    // Validate amount
     if (!Number.isFinite(amount) || amount <= 0) {
-        showError("Please enter a valid amount greater than zero.");
+        showError("Please enter an amount greater than zero.");
         return;
     }
 
-    // Loading state
+    // Cancel any previous unfinished request
+    if (activeRequest) {
+        activeRequest.abort();
+    }
+
+    activeRequest = new AbortController();
+
+    const currentRequest = activeRequest;
+
     convertButton.disabled = true;
     convertButton.textContent = "Converting...";
+    convertButton.setAttribute("aria-busy", "true");
 
     try {
 
         let exchangeRate = 1;
         let rateDate = null;
 
-        // No API request is needed for identical currencies
         if (from !== to) {
 
             const response = await fetch(
-                `${API_URL}/rate/${from}/${to}`
+                `${API_URL}/rate/${from}/${to}`,
+                { signal: currentRequest.signal }
             );
 
             if (!response.ok) {
-                throw new Error("Unable to retrieve exchange rates.");
+                throw new Error("Exchange rate is unavailable for this currency pair.");
             }
 
             const data = await response.json();
 
-            exchangeRate = data.rate;
+            exchangeRate = Number(data.rate);
             rateDate = data.date;
 
             if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
@@ -119,20 +196,18 @@ async function convertCurrency(event) {
             }
         }
 
-        // Calculate conversion
+        // Calculate converted amount
         const convertedAmount = amount * exchangeRate;
 
-        // Display conversion result
+        // Display result
         resultDisplay.textContent = formatCurrency(
             convertedAmount,
             to
         );
 
-        // Display exchange rate
         exchangeRateDisplay.textContent =
             `1 ${from} = ${exchangeRate.toFixed(6)} ${to}`;
 
-        // Display last updated date
         lastUpdatedDisplay.textContent = rateDate
             ? `Rate date: ${rateDate}`
             : "Same currency — no conversion needed.";
@@ -141,24 +216,45 @@ async function convertCurrency(event) {
 
     } catch (error) {
 
-        console.error("Currency conversion error:", error);
+        if (error.name === "AbortError") {
+            return;
+        }
+
+        console.error("Conversion error:", error);
 
         showError(
-            "Unable to convert currencies. Please check your internet connection and try again."
+            error.message || "Something went wrong. Please try again."
         );
 
     } finally {
 
-        // Restore button
-        convertButton.disabled = false;
-        convertButton.textContent = "Convert Currency";
-
+        // Only the latest request can update the button
+        if (activeRequest === currentRequest) {
+            activeRequest = null;
+            convertButton.disabled = false;
+            convertButton.textContent = "Convert Currency";
+            convertButton.removeAttribute("aria-busy");
+        }
     }
 }
 
 
 // =========================================
-// 7. SWAP CURRENCIES
+// 7. AUTOMATIC CONVERSION
+// =========================================
+
+function scheduleConversion() {
+
+    clearTimeout(conversionTimer);
+
+    conversionTimer = setTimeout(() => {
+        convertCurrency();
+    }, 500);
+}
+
+
+// =========================================
+// 8. SWAP CURRENCIES
 // =========================================
 
 function swapCurrencies() {
@@ -166,22 +262,40 @@ function swapCurrencies() {
     const previousFrom = fromCurrency.value;
 
     fromCurrency.value = toCurrency.value;
-
     toCurrency.value = previousFrom;
 
-    // Clear previous results after swapping
-    resultSection.hidden = true;
-
-    clearError();
+    scheduleConversion();
 }
 
 
 // =========================================
-// 8. EVENT LISTENERS
+// 9. EVENT LISTENERS
 // =========================================
 
-// Listen for form submission
+// Manual conversion
 converterForm.addEventListener("submit", convertCurrency);
 
-// Listen for currency swap
+// Swap currencies
 swapButton.addEventListener("click", swapCurrencies);
+
+// Automatic conversion when amount changes
+amountInput.addEventListener("input", scheduleConversion);
+
+// Automatic conversion when currencies change
+fromCurrency.addEventListener("change", scheduleConversion);
+toCurrency.addEventListener("change", scheduleConversion);
+
+
+// =========================================
+// 10. INITIALIZE APPLICATION
+// =========================================
+
+async function initializeConverter() {
+
+    await loadCurrencies();
+
+    // Perform the first conversion
+    convertCurrency();
+}
+
+initializeConverter();
