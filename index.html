@@ -1,0 +1,129 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta name="description" content="Convert currencies easily with our simple currency converter using live exchange rates.">
+
+    <title>Currency Converter</title>
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/style.css">
+
+    <!-- JavaScript -->
+    <script src="js/script.js" defer></script>
+</head>
+<body>
+
+    <header class="header">
+        <div class="container">
+            <h1 class="logo">Currency<span>Convert</span></h1>
+            <p class="tagline">Simple. Fast. Reliable.</p>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="container">
+
+            <section class="converter-card">
+
+                <div class="card-heading">
+                    <h2>Currency Converter</h2>
+                    <p>Convert your money between different currencies.</p>
+                </div>
+
+                <form id="converter-form">
+
+                    <!-- Amount Input -->
+                    <div class="form-group">
+                        <label for="amount">Amount</label>
+                        <input
+                            type="number"
+                            id="amount"
+                            placeholder="Enter amount"
+                            min="0.01"
+                            step="any"
+                            value="1"
+                            required
+                        >
+                    </div>
+
+                    <!-- Currency Selection -->
+                    <div class="currency-selection">
+
+                        <div class="form-group">
+                            <label for="from-currency">From</label>
+                            <select id="from-currency" required>
+                                <option value="GHS" selected>GHS - Ghanaian Cedi</option>
+                                <option value="USD">USD - US Dollar</option>
+                                <option value="EUR">EUR - Euro</option>
+                                <option value="GBP">GBP - British Pound</option>
+                                <option value="NGN">NGN - Nigerian Naira</option>
+                            </select>
+                        </div>
+
+                        <!-- Swap Button -->
+                        <button
+                            type="button"
+                            id="swap-button"
+                            class="swap-button"
+                            aria-label="Swap currencies"
+                            title="Swap currencies"
+                        >
+                            ⇄
+                        </button>
+
+                        <div class="form-group">
+                            <label for="to-currency">To</label>
+                            <select id="to-currency" required>
+                                <option value="USD" selected>USD - US Dollar</option>
+                                <option value="GHS">GHS - Ghanaian Cedi</option>
+                                <option value="EUR">EUR - Euro</option>
+                                <option value="GBP">GBP - British Pound</option>
+                                <option value="NGN">NGN - Nigerian Naira</option>
+                            </select>
+                        </div>
+
+                    </div>
+
+                    <!-- Convert Button -->
+                    <button type="submit" id="convert-button" class="convert-button">
+                        Convert Currency
+                    </button>
+
+                </form>
+
+                <!-- Conversion Result -->
+                <section id="result-section" class="result-section" aria-live="polite" hidden>
+
+                    <p class="result-label">Conversion Result</p>
+
+                    <h2 id="result">0.00 USD</h2>
+
+                    <p id="exchange-rate" class="exchange-rate">
+                        Exchange rate will appear here.
+                    </p>
+
+                    <p id="last-updated" class="last-updated"></p>
+
+                </section>
+
+                <!-- Error Message -->
+                <p id="error-message" class="error-message" role="alert" hidden></p>
+
+            </section>
+
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 Currency Converter. All rights reserved.</p>
+            <p>Exchange rates are subject to market changes.</p>
+        </div>
+    </footer>
+
+</body>
+</html>
